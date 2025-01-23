@@ -1,0 +1,30 @@
+{
+    "areaSkills": [
+        {
+            "id": 1,
+            "type": "area",
+            "name": "대 폭발",
+            "description": "큰 폭발을 일으킨다.",
+            "prefab": "Skill/Explosion",
+            "cooldown": 5000,
+            "damage": 100,
+            "cost": 15,
+            "range": 2.0,
+            "duration": 0.0
+        }
+    ],
+    "directionalSkills": [
+        {
+            "id": 2,
+            "type": "directional",
+            "name": "크게 베기",
+            "description": "주변을 크게 베어낸다.",
+            "prefab": "Skill/Slash",
+            "cooldown": 3000,
+            "damage": 30,
+            "cost": 5,
+            "angle": 240.0,
+            "range": 2.5
+        }
+    ]
+}

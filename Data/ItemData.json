@@ -1,0 +1,80 @@
+{
+   "weapons":[
+      {
+         "id":"1",
+         "name":"기본 검",
+         "weaponType":"Sword",
+         "iconPath":"Textures/Item/sword",
+         "effects":[
+            {
+               "effectType":"AttackBoost",
+               "value":"5"
+            }
+         ]
+      },
+      {
+         "id":"2",
+         "name":"기본 활",
+         "weaponType":"Bow",
+         "iconPath":"Textures/Item/bow",
+         "effects":[
+            {
+               "effectType":"AttackBoost",
+               "value":"3"
+            }
+         ]
+      }
+   ],
+   "armors":[
+      {
+         "id":"100",
+         "name":"기본 갑옷",
+         "armorType":"Armor",
+         "iconPath":"Textures/Item/armor",
+         "effects":[
+            {
+               "effectType":"DefenseBoost",
+               "value":"3"
+            }
+         ]
+      },
+      {
+         "id":"101",
+         "name":"기본 투구",
+         "armorType":"Helmet",
+         "iconPath":"Textures/Item/helmets",
+         "effects":[
+            {
+               "effectType":"DefenseBoost",
+               "value":"2"
+            }
+         ]
+      }
+   ],
+   "consumables":[
+      {
+         "id":"200",
+         "name":"HP 물약",
+         "consumableType":"Potion",
+         "iconPath":"Textures/Item/potion",
+         "effects":[
+            {
+               "effectType":"Heal",
+               "value":"20"
+            }
+         ]
+      },
+      {
+         "id":"201",
+         "name":"사과",
+         "consumableType":"Potion",
+         "iconPath":"Textures/Item/apple",
+         "effects":[
+            {
+               "effectType":"Heal",
+               "value":"30"
+            }
+         ]
+      }
+   ]
+}
