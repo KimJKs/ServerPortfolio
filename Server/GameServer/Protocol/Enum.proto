@@ -1,0 +1,63 @@
+syntax = "proto3";
+package Protocol;
+
+enum ObjectType {
+  NONE = 0;
+  PLAYER = 1;
+  MONSTER = 2;
+  PROJECTILE = 3;
+}
+
+enum CreatureState {
+  IDLE = 0;
+  MOVING = 1;
+  ATTACK = 2;
+  DEAD = 3;
+}
+
+enum ItemType {
+  ITEM_TYPE_NONE = 0;
+  ITEM_TYPE_WEAPON = 1;
+  ITEM_TYPE_ARMOR = 2;
+  ITEM_TYPE_CONSUMABLE = 3;
+}
+
+enum WeaponType {
+  WEAPON_TYPE_NONE = 0;
+  WEAPON_TYPE_SWORD = 1;
+  WEAPON_TYPE_BOW = 2;
+}
+
+enum ArmorType {
+  ARMOR_TYPE_NONE = 0;
+  ARMOR_TYPE_HELMET = 1;
+  ARMOR_TYPE_ARMOR = 2;
+  ARMOR_TYPE_BOOTS = 3;
+}
+
+enum ConsumableType {
+   CONSUMABLE_TYPE_NONE = 0;
+   CONSUMABLE_TYPE_POTION = 1;
+}
+
+enum CurrencyType{
+    GOLD = 0;
+}
+
+enum EffectType{
+    HEAL = 0;
+    ATTACK_BOOST = 1;
+    DEFENSE_BOOST = 2;
+}
+
+enum ChatType {
+  CHAT_TYPE_GENERAL = 0;
+  CHAT_TYPE_WHISPER = 1;
+  CHAT_TYPE_SYSTEM = 2;
+}
+
+enum ResourceType{
+    HP = 0;
+    MP = 1;
+}
+

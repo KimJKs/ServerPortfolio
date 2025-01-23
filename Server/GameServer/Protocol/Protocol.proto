@@ -1,0 +1,225 @@
+syntax = "proto3";
+package Protocol;
+
+import "Enum.proto";
+import "Struct.proto";
+
+message C_LOGIN
+{
+	string id =1;
+	string password =2;
+}
+
+message C_SIGN_UP
+{
+	string id =1;
+	string password =2;
+}
+
+message S_LOGIN
+{
+	bool success = 1;
+	PlayerInfo playerInfo = 2; 
+}
+
+message C_ENTER_GAME 
+{
+	bool isDummy = 1;
+	int32 dummyNumber = 2;
+	ObjectInfo objectInfo = 3;
+}
+
+message C_ENTER_ROOM 
+{
+	int32 mapId = 1;  
+}
+
+message S_ENTER_ROOM 
+{
+	ObjectInfo player = 1;
+	int32 mapId = 2;  
+}
+
+message C_LEAVE_GAME
+{
+
+}
+
+message S_LEAVE_ROOM
+{
+  int32 objectId = 1;
+}
+
+message S_SPAWN 
+{
+  repeated ObjectInfo objects = 1;
+}
+
+message S_DESPAWN 
+{
+  repeated int32 objectIds = 1;
+}
+
+message C_MOVE 
+{
+  PositionInfo posInfo = 1;
+  uint64 timeStamp = 3;
+}
+
+message S_MOVE 
+{
+  int32 objectId = 1;
+  PositionInfo posInfo = 2;
+  uint64 timeStamp = 3;
+}
+
+message C_POS_SYNC 
+{
+  PositionInfo posInfo = 1;
+}
+
+message C_ATTACK 
+{
+  float dirX = 1;
+  float dirZ = 2;
+}
+
+message S_ATTACK 
+{
+  int32 attackerId = 1;
+  float dirX = 2;
+  float dirZ = 3;
+}
+
+message S_UPDATE_RESOURCE 
+{
+  int32 objectId = 1;
+  int32 nowValue = 2;
+  int32 changeValue = 3;
+  ResourceType type = 4;
+
+}
+
+message S_DIE 
+{
+  int32 objectId = 1;
+  int32 attackerId = 2;
+}
+
+message S_PING 
+{
+  uint64 timeStamp = 1;
+}
+
+message C_PONG 
+{
+  uint64 timeStamp = 1;
+}
+
+message S_USER_STATUS 
+{
+  PlayerInfo playerData = 1;
+}
+
+message S_ITEM_LIST 
+{
+  repeated ItemInfo items = 1;
+}
+
+message S_ADD_ITEM 
+{
+  repeated ItemInfo items = 1;
+}
+
+message S_CHANGE_CURRENCY 
+{
+  CurrencyType currencyType = 1; 
+  int32 changeAmount = 2;       
+  int32 totalAmount = 3;        
+}
+
+message C_SKILL 
+{
+  PositionInfo posInfo = 1;
+  int32 skillTemplateId = 2;
+}
+
+message S_SKILL 
+{
+  bool success = 1;
+  PositionInfo posInfo = 2;
+  int32 skillTemplateId = 3;
+  int32 attackerId = 4;
+}
+
+
+//---------아이템 관련
+message C_USE_ITEM 
+{
+  int32 itemDbId = 1; 
+}
+
+message S_CHANGE_ITEM_INFO 
+{
+  repeated ItemInfo items = 1;
+}
+
+message C_DROP_ITEM 
+{
+  int32 itemDbId = 1; 
+}
+
+message S_REMOVE_ITEM 
+{
+  int32 removedItemDbID = 1;
+}
+
+
+//---------마켓 관련
+message C_REQUEST_MARKET_ITEM_LIST 
+{
+}
+
+message S_MARKET_ITEM_LIST 
+{
+  repeated MarketItemInfo items = 1; // 구매된 아이템 정보
+}
+
+message C_PURCHASE_MARKET_ITEM 
+{
+  int32 itemdDbId = 1;
+}
+
+message C_REGISTER_MARKET_ITEM 
+{
+  int32 itemdDbId = 1;
+  int32 cost = 2;
+}
+
+message S_PURCHASE_MARKET_ITEM 
+{
+  bool result = 1;
+  ItemInfo items = 2;
+}
+
+
+//------------채팅 관련
+message C_CHAT 
+{
+  string message = 1;
+  int32 senderId = 2;
+}
+
+message S_CHAT 
+{
+  string prefix  = 1;
+  string content  = 2;
+  ChatType type = 3;
+  int32 senderId = 4;
+}
+
+message C_WHISPER {
+  string receiverName = 1;
+  string message = 2;
+}
+
