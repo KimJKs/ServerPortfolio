@@ -18,6 +18,7 @@ public:
 
 		if constexpr (std::is_same_v<T, Player>)
 		{
+			std::lock_guard<std::mutex> lock(_mutex);
 			_players[gameObject->GetId()] = std::static_pointer_cast<Player>(gameObject);
 		}
 

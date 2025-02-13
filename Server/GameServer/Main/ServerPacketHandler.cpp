@@ -74,7 +74,7 @@ bool Handle_C_LOGIN(PacketSessionRef& session, Protocol::C_LOGIN& pkt)
 	// 클라이언트로 응답 전송
 	SendBufferRef sendBuffer = ServerPacketHandler::MakeSendBuffer(loginPkt);
 	gameSession->Send(sendBuffer);
-	//SEND_PACKET(loginPkt);
+
 	return userExists;
 }
 

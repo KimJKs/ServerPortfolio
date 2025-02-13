@@ -14,6 +14,7 @@
 #include "DataManager.h"
 #include "DBManager.h"
 #include "RoomManager.h"
+#include "ServerMonitor.h"
 #include <atomic>
 #include <chrono>
 
@@ -39,29 +40,6 @@ void DoWorkerJob(ServerServiceRef& service)
 	}
 }
 
-void MeasureTPS()
-{
-	while (true)
-	{
-		using namespace std::chrono;
-		std::this_thread::sleep_for(1s);
-
-		auto now = steady_clock::now();
-		auto duration = duration_cast<seconds>(now - lastMeasureTime).count();
-		if (duration == 0) continue;
-
-		// TPS 계산
-		int64_t recvTPS = recvPacketCount.exchange(0) / duration;
-		int64_t sendTPS = sendPacketCount.exchange(0) / duration;
-
-		lastMeasureTime = now;
-
-		// 로그 출력
-		std::cout << "[TPS] Recv: " << recvTPS << " / Send: " << sendTPS
-			<< " / Active Sessions: " << sessionCount.load() << std::endl;
-	}
-}
-
 void NetworkTask()
 {
 	while (true)
@@ -69,7 +47,8 @@ void NetworkTask()
 		auto sessions = GSessionManager.GetSessions();
 		for (const auto& session : sessions)
 		{
-			session->FlushSend();
+			if (session->HasSendPacket())
+				session->FlushSend();
 		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	}
@@ -98,19 +77,18 @@ int main()
 			});
 	}
 
-	std::thread tpsThread(MeasureTPS);
-	tpsThread.detach();
-
 	std::thread networkThread(NetworkTask);
 	networkThread.detach();
 
+	// 1초마다 TPS 측정하기추가
+	GServerMonitor->DoAsync(&ServerMonitor::MeasureTPS);
 	//기본 필드 추가
-	GRoomManager->DoAsync(&RoomManager::Add,0);
+	GRoomManager->DoAsync(&RoomManager::Add, 0);
 	//업데이트 작동
 	GRoomManager->DoAsync(&RoomManager::Update);
 
-	
+
 	GDBManager->Init();
-	
+
 	GThreadManager->Join();
 }

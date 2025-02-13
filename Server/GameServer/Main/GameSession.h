@@ -22,6 +22,8 @@ public:
 	const shared_ptr<UserStatus>& GetUserStatus() { return _userStatus; }
 	void SetUserStatus(const shared_ptr<UserStatus>& value) { _userStatus = value; }
 
+	bool HasSendPacket() { return !_sendQueue.empty(); }
+
 public:
 
 	shared_ptr<Player> player;
@@ -35,8 +37,4 @@ private:
 	std::chrono::steady_clock::time_point _lastSendTime = std::chrono::steady_clock::now();
 
 };
-// TPS 관련 전역 변수
-extern std::atomic<int64_t> recvPacketCount;
-extern std::atomic<int64_t> sendPacketCount;
-extern std::atomic<int> sessionCount;
-extern std::chrono::steady_clock::time_point lastMeasureTime;
+

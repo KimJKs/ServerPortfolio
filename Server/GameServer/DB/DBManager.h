@@ -8,7 +8,7 @@
 #include <iostream>
 #include "DB_Class.h"
 
-class DBManager
+class DBManager : public JobQueue
 {
 public:
 
