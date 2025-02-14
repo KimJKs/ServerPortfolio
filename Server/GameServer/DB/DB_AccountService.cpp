@@ -7,7 +7,8 @@
 #include "Room.h"
 
 
-bool DB_AccountService::FetchUserInfo(const std::wstring& username, const std::wstring& password, int32& userId, int32& goldAmount) {
+bool DB_AccountService::FetchUserInfo(const std::wstring& username, const std::wstring& password, int32& userId) 
+{
 	DBConnection* dbConn = GDBConnectionPool->Pop();
 	ASSERT_CRASH(dbConn != nullptr);
 	LOG_EVENT(Color::WHITE, L"[DB] Fetching user info. Username=%s\n", username.c_str());
@@ -15,14 +16,13 @@ bool DB_AccountService::FetchUserInfo(const std::wstring& username, const std::w
 	bool success = false;
 
 	try {
-		DBBind<2, 2> dbBind(*dbConn, L"SELECT UserAccount.UserId, UserStatus.GoldAmount "
+		DBBind<2, 1> dbBind(*dbConn, L"SELECT UserAccount.UserId "
 			L"FROM UserAccount "
 			L"JOIN UserStatus ON UserAccount.UserId = UserStatus.UserId "
 			L"WHERE UserAccount.Username = ? AND UserAccount.Password = ?");
 		dbBind.BindParam(0, username.c_str());
 		dbBind.BindParam(1, password.c_str());
 		dbBind.BindCol(0, OUT userId);
-		dbBind.BindCol(1, OUT goldAmount);
 
 
 		success = dbBind.Execute() && dbConn->Fetch();

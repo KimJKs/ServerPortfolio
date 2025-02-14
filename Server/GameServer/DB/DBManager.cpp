@@ -10,7 +10,7 @@ shared_ptr<DBManager> GDBManager = make_shared<DBManager>();
 
 void DBManager::Init()
 {
-	ASSERT_CRASH(GDBConnectionPool->Connect(1, L"Driver={ODBC Driver 17 for SQL Server};Server=(localdb)\\ProjectModels;Database=ServerDb;Trusted_Connection=Yes;"));
+	ASSERT_CRASH(GDBConnectionPool->Connect(8, L"Driver={ODBC Driver 17 for SQL Server};Server=(localdb)\\ProjectModels;Database=ServerDb;Trusted_Connection=Yes;"));
     LOG_EVENT(Color::GREEN, L"[DB] Connected to database successfully.\n");
 
 

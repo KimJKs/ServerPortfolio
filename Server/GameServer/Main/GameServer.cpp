@@ -15,6 +15,7 @@
 #include "DBManager.h"
 #include "RoomManager.h"
 #include "ServerMonitor.h"
+#include "DBWorker.h"
 #include <atomic>
 #include <chrono>
 
@@ -40,20 +41,6 @@ void DoWorkerJob(ServerServiceRef& service)
 	}
 }
 
-void NetworkTask()
-{
-	while (true)
-	{
-		auto sessions = GSessionManager.GetSessions();
-		for (const auto& session : sessions)
-		{
-			if (session->HasSendPacket())
-				session->FlushSend();
-		}
-		std::this_thread::sleep_for(std::chrono::milliseconds(10));
-	}
-}
-
 int main()
 {
 
@@ -69,6 +56,7 @@ int main()
 
 	ASSERT_CRASH(service->Start());
 
+	//워커 스레드 할당
 	for (int32 i = 0; i < 16; i++)
 	{
 		GThreadManager->Launch([&service]()
@@ -76,17 +64,25 @@ int main()
 				DoWorkerJob(service);
 			});
 	}
+	//DB 스레드 할당
+	for (int32 i = 0; i < 3; i++)
+	{
+		GThreadManager->Launch([]()
+			{
 
-	std::thread networkThread(NetworkTask);
-	networkThread.detach();
+				GDBWorker->WorkerThread(); 
+			});
+	}
 
+	//패킷 모아보내기 시작
+	GSessionManager->FlushSessionPacket();
 	// 1초마다 TPS 측정하기추가
-	GServerMonitor->DoAsync(&ServerMonitor::MeasureTPS);
+	//GServerMonitor->DoAsync(&ServerMonitor::MeasureTPS);
 	//기본 필드 추가
 	GRoomManager->DoAsync(&RoomManager::Add, 0);
 	//업데이트 작동
 	GRoomManager->DoAsync(&RoomManager::Update);
-
+	
 
 	GDBManager->Init();
 

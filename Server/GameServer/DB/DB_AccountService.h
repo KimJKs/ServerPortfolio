@@ -6,7 +6,7 @@ class DBConnection;
 class DB_AccountService {
 public:
 
-	static bool FetchUserInfo(const std::wstring& username, const std::wstring& password, int32& userId, int32& goldAmount);
+	static bool FetchUserInfo(const std::wstring& username, const std::wstring& password, int32& userId);
 
 	// 유저의 골드 변경
 	static bool ChangeGold(DBConnection* dbConn, int32 userId, int32 amount, shared_ptr<Room> room);

@@ -15,6 +15,7 @@
 #include "DB_MarketService.h"
 #include "DB_ItemService.h"
 #include "RoomManager.h"
+#include "DBWorker.h"
 #include <thread>
 #include <future>
 
@@ -23,7 +24,7 @@ PacketHandlerFunc GPacketHandler[UINT16_MAX];
 bool Handle_INVALID(PacketSessionRef& session, BYTE* buffer, int32 len)
 {
 	PacketHeader* header = reinterpret_cast<PacketHeader*>(buffer);
-	// TODO : Log
+
 	return false;
 }
 
@@ -32,98 +33,99 @@ bool Handle_C_LOGIN(PacketSessionRef& session, Protocol::C_LOGIN& pkt)
 	LOG_EVENT(Color::WHITE, L"[PacketHandler] C_LOGIN Packet received: ID=%s\n", pkt.id().c_str());
 
 	shared_ptr<GameSession> gameSession = static_pointer_cast<GameSession>(session);
-
-	Protocol::S_LOGIN loginPkt;
-
-	// 클라이언트로부터 받은 아이디와 비밀번호
 	std::wstring username = Utils::StringToWString(pkt.id());
 	std::wstring password = Utils::StringToWString(pkt.password());
 
-	int32 userId = 0;
-	int32 goldAmount = 0;
+	GDBWorker->AddJob([gameSession, username, password, pkt]()
+		{
+			int32 userId = 0;
+			bool userExists = DB_AccountService::FetchUserInfo(username, password, userId);
 
-	// DB에서 아이디와 비밀번호 확인
-	bool userExists = DB_AccountService::FetchUserInfo(username, password, userId, goldAmount);
+			shared_ptr<UserStatus> userStatus = nullptr;
+			if (userExists)
+			{
+				userStatus = DB_AccountService::LoginUser(userId, false);
+			}
 
-	if (userExists) {
-		// 유저가 존재하면 성공 처리
-		loginPkt.set_success(true);
+			GRoomManager->DoAsync([gameSession, userExists, userStatus, userId, pkt]()
+				{
+					Protocol::S_LOGIN loginPkt;
 
-		// 플레이어 생성
-		shared_ptr<Player> player = ObjectManager::Instance().Add<Player>();
-		player->SetSession(gameSession);
+					if (userExists)
+					{
+						loginPkt.set_success(true);
 
-		player->SetObjectName(Utils::WStringToString(username));
+						shared_ptr<Player> player = ObjectManager::Instance().Add<Player>();
+						player->SetSession(gameSession);
+						player->SetObjectName(pkt.id());
+						gameSession->player = player;
 
-		gameSession->player = player;
+						gameSession->SetUserStatus(userStatus);
 
-		// 로그인 진행하고 UserStatus 저장
-		auto userStatus = DB_AccountService::LoginUser(userId, false);
-		gameSession->SetUserStatus(userStatus);
+						Protocol::PlayerInfo* playerInfo = loginPkt.mutable_playerinfo();
+						playerInfo->set_name(pkt.id());
+						playerInfo->set_goldamount(userStatus->GetGoldAmount());
+					}
+					else
+					{
+						loginPkt.set_success(false);
+					}
 
-		// 플레이어 정보 설정
-		Protocol::PlayerInfo* playerInfo = loginPkt.mutable_playerinfo();
-		playerInfo->set_name(pkt.id());
-		playerInfo->set_goldamount(goldAmount);
-	}
-	else {
-		// 유저가 존재하지 않거나 비밀번호가 틀린 경우
-		loginPkt.set_success(false); 
-	}
+					SendBufferRef sendBuffer = ServerPacketHandler::MakeSendBuffer(loginPkt);
+					gameSession->Send(sendBuffer);
+				},true);
+		});
 
-	// 클라이언트로 응답 전송
-	SendBufferRef sendBuffer = ServerPacketHandler::MakeSendBuffer(loginPkt);
-	gameSession->Send(sendBuffer);
-
-	return userExists;
+	return true;
 }
+
 
 bool Handle_C_SIGN_UP(PacketSessionRef& session, Protocol::C_SIGN_UP& pkt)
 {
 	LOG_EVENT(Color::WHITE, L"[PacketHandler] C_SIGN_UP Packet received: ID=%s\n", pkt.id().c_str());
 
 	shared_ptr<GameSession> gameSession = static_pointer_cast<GameSession>(session);
-
 	std::wstring username = Utils::StringToWString(pkt.id());
 	std::wstring password = Utils::StringToWString(pkt.password());
 
-	int32 userDbId = 0;
+	GDBWorker->AddJob([gameSession, username, password, pkt]()
+		{
+			int32 userDbId = 0;
+			bool success = DB_AccountService::RegisterUser(username, password, userDbId);
 
-	bool success = DB_AccountService::RegisterUser(username, password, userDbId);
+			shared_ptr<UserStatus> userStatus = nullptr;
+			if (success)
+			{
+				userStatus = DB_AccountService::LoginUser(userDbId, false);
+			}
 
-	Protocol::S_LOGIN loginPkt;
+			GRoomManager->DoAsync([gameSession, success, userStatus, userDbId, pkt]()
+				{
+					Protocol::S_LOGIN loginPkt;
+					loginPkt.set_success(success);
 
-	loginPkt.set_success(success);
+					if (success)
+					{
+						shared_ptr<Player> player = ObjectManager::Instance().Add<Player>();
+						player->SetSession(gameSession);
+						player->SetObjectName(pkt.id());
+						gameSession->player = player;
 
-	if (success)
-	{
-		// 유저가 존재하면 성공 처리
-		loginPkt.set_success(true);
+						gameSession->SetUserStatus(userStatus);
 
-		// 플레이어 생성
-		shared_ptr<Player> player = ObjectManager::Instance().Add<Player>();
-		player->SetSession(gameSession);
+						Protocol::PlayerInfo* playerInfo = loginPkt.mutable_playerinfo();
+						playerInfo->set_name(pkt.id());
+						playerInfo->set_goldamount(0);
+					}
 
-		player->SetObjectName(Utils::WStringToString(username));
-
-		gameSession->player = player;
-
-		// 로그인 진행하고 UserStatus 저장
-		auto userStatus = DB_AccountService::LoginUser(userDbId, false);
-		gameSession->SetUserStatus(userStatus);
-
-		// 플레이어 정보 설정
-		Protocol::PlayerInfo* playerInfo = loginPkt.mutable_playerinfo();
-		playerInfo->set_name(pkt.id());
-		playerInfo->set_goldamount(0);
-	}
-
-	SendBufferRef sendBuffer = ServerPacketHandler::MakeSendBuffer(loginPkt);
-	gameSession->Send(sendBuffer);
-	//SEND_PACKET(loginPkt);
+					SendBufferRef sendBuffer = ServerPacketHandler::MakeSendBuffer(loginPkt);
+					gameSession->Send(sendBuffer);
+				}, true);
+		});
 
 	return true;
 }
+
 
 bool Handle_C_ENTER_GAME(PacketSessionRef& session, Protocol::C_ENTER_GAME& pkt)
 {
@@ -333,55 +335,68 @@ bool Handle_C_PURCHASE_MARKET_ITEM(PacketSessionRef& session, Protocol::C_PURCHA
 		return false;
 
 	auto player = gameSession->player;
-
-	int32 sellerId = -1;
+	int32 userId = gameSession->GetUserStatus()->GetUserId();
+	int32 itemDbId = pkt.itemddbid();
 
 	if (!player->GetInventory().GetEmptySlot())
 		return false;
 
-
 	int32 slot = player->GetInventory().GetEmptySlot().value();
 
-
-	// DB 작업을 통해 시장 아이템 구매 처리
-	if (!DB_MarketService::PurchaseMarketItem(gameSession->GetUserStatus()->GetUserId(), pkt.itemddbid(), player->GetRoom(), slot, sellerId))
-		return false;
-
-	//shared_ptr<Item> item = Item::CreateItem(*GDBManager->GetItem(pkt.itemddbid()));
-	shared_ptr<Item> item = nullptr;
-
-	shared_ptr<Player> sellerPlayer = GRoomManager->FindPlayerByUserDbId(sellerId);
-
-
-	if (sellerPlayer)
-	{
-		item = sellerPlayer->GetInventory().Get(pkt.itemddbid());
-		sellerPlayer->GetInventory().Remove(pkt.itemddbid());
-		Protocol::S_REMOVE_ITEM packet;
+	// DBWorker에서 시장 아이템 구매를 비동기 처리
+	GDBWorker->AddJob([gameSession, player, userId, itemDbId, slot]()
 		{
-			packet.set_removeditemdbid(pkt.itemddbid());
-		}
-		SendBufferRef sendBufferFirst = ServerPacketHandler::MakeSendBuffer(packet);
-		sellerPlayer->GetSession().lock()->Send(sendBufferFirst);
-	}
-	else item = Item::CreateItem(*GDBManager->GetItem(pkt.itemddbid()));
+			int32 sellerId = -1;
 
-	item->SetOnMarket(false);
-	player->GetInventory().Add(item);
+			// DB에서 시장 아이템 구매 처리
+			if (!DB_MarketService::PurchaseMarketItem(userId, itemDbId, player->GetRoom(), slot, sellerId))
+				return;
 
-	Protocol::S_PURCHASE_MARKET_ITEM packet2;
-	{
+			shared_ptr<Player> sellerPlayer = GRoomManager->FindPlayerByUserDbId(sellerId);
 
-		Protocol::ItemInfo itemInfo = item->GetItemInfo();
+			// 워크 스레드에서 실행
+			GRoomManager->DoAsync([gameSession, player, sellerPlayer, itemDbId]()
+				{
+					shared_ptr<Item> item = nullptr;
 
-		Protocol::ItemInfo* packetItemInfo = packet2.mutable_items();
-		*packetItemInfo = itemInfo;
-	}
+					if (!gameSession || !player)
+						return;
 
-	SendBufferRef sendBuffer = ServerPacketHandler::MakeSendBuffer(packet2);
-	gameSession->Send(sendBuffer);
-	//SEND_PACKET(packet2);
+					if (sellerPlayer)
+					{
+						
+						item = sellerPlayer->GetInventory().Get(itemDbId);
+						if (!item)
+							return;
 
+						sellerPlayer->GetInventory().Remove(itemDbId);
+
+						Protocol::S_REMOVE_ITEM packet;
+						packet.set_removeditemdbid(itemDbId);
+
+						SendBufferRef sendBufferFirst = ServerPacketHandler::MakeSendBuffer(packet);
+						sellerPlayer->GetSession().lock()->Send(sendBufferFirst);
+					}
+					else
+					{
+						item = Item::CreateItem(*GDBManager->GetItem(itemDbId));
+					}
+
+					item->SetOnMarket(false);
+					player->GetInventory().Add(item);
+
+					// 클라이언트에 변경된 아이템 정보 전송
+					Protocol::S_PURCHASE_MARKET_ITEM packet2;
+					{
+						Protocol::ItemInfo itemInfo = item->GetItemInfo();
+						Protocol::ItemInfo* packetItemInfo = packet2.mutable_items();
+						*packetItemInfo = itemInfo;
+					}
+
+					SendBufferRef sendBuffer = ServerPacketHandler::MakeSendBuffer(packet2);
+					gameSession->Send(sendBuffer);
+				}, true);
+		});
 
 	return true;
 }
@@ -393,40 +408,56 @@ bool Handle_C_REGISTER_MARKET_ITEM(PacketSessionRef& session, Protocol::C_REGIST
 		return false;
 
 	auto player = gameSession->player;
+	int32 userId = gameSession->GetUserStatus()->GetUserId();
+	int32 itemDbId = pkt.itemddbid();
+	int32 cost = pkt.cost();
 
-	shared_ptr<ItemDB> registerItem;
+	// DBWorker에서 시장 아이템 등록을 비동기 처리
+	GDBWorker->AddJob([gameSession, player, userId, itemDbId, cost]()
+		{
+			shared_ptr<ItemDB> registerItem;
+			if (!DB_MarketService::RegisterMarketItem(userId, itemDbId, cost, OUT registerItem))
+				return;
 
-	// DB 작업을 통해 시장에 아이템 등록
-	if (!DB_MarketService::RegisterMarketItem(gameSession->GetUserStatus()->GetUserId(), pkt.itemddbid(), pkt.cost(), OUT registerItem))
-		return false;
+			// 워크 스레드에서 아이템 상태 업데이트 및 클라이언트 응답 전송
+			GRoomManager->DoAsync([gameSession, player, registerItem, itemDbId]()
+				{
+					if (!gameSession || !player)
+						return;
 
-	shared_ptr<Item> item = player->GetInventory().Get(pkt.itemddbid());
+					auto item = player->GetInventory().Get(itemDbId);
+					if (!item)
+						return;
 
-	item->SetOnMarket(true);
-	if (item->IsEquipped())
-	{
-		item->SetEquipped(false);
-		player->GetInventory().UnequipItem(item->GetItemType());
-	}
+					item->SetOnMarket(true);
+					if (item->IsEquipped())
+					{
+						item->SetEquipped(false);
+						player->GetInventory().UnequipItem(item->GetItemType());
+					}
 
-	GDBManager->AddItem(registerItem);
-	DB_ItemService::UpdateItem(registerItem->GetItemId(), item->GetCount(), item->IsEquipped());
+					GDBManager->AddItem(registerItem);
 
-	Protocol::S_CHANGE_ITEM_INFO packet;
-	{
-		Protocol::ItemInfo itemInfo = item->GetItemInfo();
+					// 아이템 상태 업데이트를 비동기 처리
+					GDBWorker->AddJob([itemDbId, count = item->GetCount(), equipped = item->IsEquipped()]()
+						{
+							DB_ItemService::UpdateItem(itemDbId, count, equipped);
+						});
 
-		Protocol::ItemInfo* packetItemInfo = packet.add_items();
-		*packetItemInfo = itemInfo;
-	}
+					// 클라이언트에 변경된 아이템 정보 전송
+					Protocol::S_CHANGE_ITEM_INFO packet;
+					auto* packetItemInfo = packet.add_items();
+					*packetItemInfo = item->GetItemInfo();
 
-	SendBufferRef sendBuffer = ServerPacketHandler::MakeSendBuffer(packet);
-	gameSession->Send(sendBuffer);
-	//SEND_PACKET(packet);
-
+					SendBufferRef sendBuffer = ServerPacketHandler::MakeSendBuffer(packet);
+					gameSession->Send(sendBuffer);
+				});
+		});
 
 	return true;
 }
+
+
 
 bool Handle_C_REQUEST_MARKET_ITEM_LIST(PacketSessionRef& session, Protocol::C_REQUEST_MARKET_ITEM_LIST& pkt)
 {

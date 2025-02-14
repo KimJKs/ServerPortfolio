@@ -15,9 +15,11 @@ public:
 	
 	vector<GameSessionRef> GetSessions();
 
+	void FlushSessionPacket();
+
 private:
 	USE_LOCK;
 	set<GameSessionRef> _sessions;
 };
 
-extern GameSessionManager GSessionManager;
+extern shared_ptr<GameSessionManager> GSessionManager;

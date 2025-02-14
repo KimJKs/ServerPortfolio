@@ -10,6 +10,7 @@
 #include "Vector3.h"
 #include "ObjectManager.h"
 #include "QuadTree.h"
+#include "DBWorker.h"
 
 
 
@@ -47,7 +48,7 @@ void Room::InitMonsterInField()
 	std::uniform_real_distribution<float> distX(mapBounds.minPoint.x, mapBounds.maxPoint.x);
 	std::uniform_real_distribution<float> distZ(mapBounds.minPoint.z, mapBounds.maxPoint.z);
 
-	for (size_t i = 0; i < 0; ++i)
+	for (size_t i = 0; i < 200; ++i)
 	{
 		float x, z;
 
@@ -401,13 +402,19 @@ void Room::HandleUseItem(std::shared_ptr<Player> player, int32 itemDbId) {
 		{
 			player->GetInventory().Remove(itemDbId);
 
-			DB_ItemService::RemoveItem(item->GetItemDbId());
+			GDBWorker->AddJob([itemDbId]()
+				{
+					DB_ItemService::RemoveItem(itemDbId);
+				});
 		}
 		else
 		{
 			item->SetCount(item->GetCount() - 1);
 
-			DB_ItemService::UpdateItem(item->GetItemDbId(), item->GetCount(), item->IsEquipped());
+			GDBWorker->AddJob([itemDbId, newCount = item->GetCount(), isEquipped = item->IsEquipped()]()
+				{
+					DB_ItemService::UpdateItem(itemDbId, newCount, isEquipped);
+				});
 		}
 	}
 	else if (item->IsEquipable()) {
@@ -424,7 +431,10 @@ void Room::HandleUseItem(std::shared_ptr<Player> player, int32 itemDbId) {
 			item->ApplyEffects(player);
 			player->GetInventory().Add(item);
 
-			DB_ItemService::UpdateItem(item->GetItemDbId(), item->GetCount(), item->IsEquipped());
+			GDBWorker->AddJob([itemDbId, newCount = item->GetCount()]()
+				{
+					DB_ItemService::UpdateItem(itemDbId, newCount, true);
+				});
 		}
 	}
 
@@ -444,7 +454,10 @@ void Room::HandleUseItem(std::shared_ptr<Player> player, int32 itemDbId) {
 void Room::HandleRemoveItem(std::shared_ptr<Player> player, int32 itemDbId) {
 	player->GetInventory().Remove(itemDbId);
 
-	DB_ItemService::RemoveItem(itemDbId);
+	GDBWorker->AddJob([itemDbId]()
+		{
+			DB_ItemService::RemoveItem(itemDbId);
+		});
 }
 
 
@@ -456,7 +469,11 @@ void Room::UnequipExistingItem(std::shared_ptr<Player> player, Protocol::ItemTyp
 		equippedItem->SetEquipped(false);
 		equippedItem->RemoveEffects(player);
 		inven.Change(equippedItem);
-		DB_ItemService::UpdateItem(equippedItem->GetItemDbId(), equippedItem->GetCount(), equippedItem->IsEquipped());
+
+		GDBWorker->AddJob([itemDbId = equippedItem->GetItemDbId(), newCount = equippedItem->GetCount()]()
+			{
+				DB_ItemService::UpdateItem(itemDbId, newCount, false);
+			});
 
 		Protocol::S_CHANGE_ITEM_INFO packet;
 		{

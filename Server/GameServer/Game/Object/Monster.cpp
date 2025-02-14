@@ -10,6 +10,8 @@
 #include "DB_ItemService.h"
 #include "DBConnection.h"
 #include "DBConnectionPool.h"
+#include "DBWorker.h"
+#include "RoomManager.h"
 
 Monster::Monster() {
 	SetObjectType(Protocol::ObjectType::MONSTER);
@@ -60,74 +62,85 @@ void Monster::Update() {
 void Monster::OnDead(std::shared_ptr<Object> attacker)
 {
 	ChangeState(MonsterState::Dead);
-
 	Creature::OnDead(attacker);
 
+	// 몬스터 리스폰 처리 (3초 후 부활)
 	if (auto room = GetRoom())
 	{
 		room->DoTimer(3000, std::bind(&Monster::Respawn, static_pointer_cast<Monster>(shared_from_this())));
 	}
 
-	//보상 획득 부분
-	if (attacker)
-	{
-		std::shared_ptr<Player> attackedPlayer = std::dynamic_pointer_cast<Player>(attacker);
-		if (attackedPlayer)
+	if (!attacker)
+		return;
+
+	std::shared_ptr<Player> attackedPlayer = std::dynamic_pointer_cast<Player>(attacker);
+	if (!attackedPlayer)
+		return;
+
+	// 보상 골드 랜덤 계산
+	int32 minRand = monsterData.goldReward.minGold;
+	int32 maxRand = monsterData.goldReward.maxGold;
+
+	std::random_device rd;
+	std::mt19937 gen(rd());
+	std::uniform_int_distribution<> distrib(minRand, maxRand);
+	int32 rewardGold = distrib(gen);
+
+	int32 userDbId = attackedPlayer->GetSession().lock()->GetUserStatus()->GetUserId();
+
+	RewardData* rewardData = GetRandomReward();
+
+	// DBWorker에서 골드 지급 및 아이템 추가를 비동기 처리
+	GDBWorker->AddJob([this, userDbId, rewardGold, attackedPlayer, rewardData]()
 		{
-			int32 minRand = monsterData.goldReward.minGold;
-			int32 maxRand = monsterData.goldReward.maxGold;
-
-			std::random_device rd;
-			std::mt19937 gen(rd());
-			std::uniform_int_distribution<> distrib(minRand, maxRand);
-			int32 rewardGold = distrib(gen);
-
-			int32 userDbId = attackedPlayer->GetSession().lock()->GetUserStatus()->GetUserId();
-
 			DBConnection* dbConn = GDBConnectionPool->Pop();
 			ASSERT_CRASH(dbConn != nullptr);
 
-			DB_AccountService::ChangeGold(dbConn, userDbId, rewardGold, GetRoom());
+			DB_AccountService::ChangeGold(dbConn, userDbId, rewardGold, attackedPlayer->GetRoom());
 
-			GDBConnectionPool->Push(dbConn);
+			std::optional<int> slot;
 
-
-			RewardData* rewardData = GetRandomReward();
-
+			// 아이템 보상 처리
 			if (rewardData)
 			{
-				int32 itemDbId = 0;
-				std::optional<int> slot = attackedPlayer->GetInventory().GetEmptySlot();
-
-				if (!slot.has_value()) return;
-
-				DB_ItemService::AddItem(userDbId, rewardData->itemId, rewardData->count, slot.value(), itemDbId);
-
-				Protocol::S_ADD_ITEM packet;
+				slot = attackedPlayer->GetInventory().GetEmptySlot();
+				if (slot.has_value())
 				{
-					Protocol::ItemInfo* itemInfo = packet.add_items();
-					itemInfo->set_count(rewardData->count);
-					itemInfo->set_equipped(false);
-					itemInfo->set_isonmarket(false);
-					itemInfo->set_itemdbid(itemDbId);
-					itemInfo->set_slot(slot.value());
-					itemInfo->set_templateid(rewardData->itemId);
+					int32 itemDbId = 0;
+					DB_ItemService::AddItem(userDbId, rewardData->itemId, rewardData->count, slot.value(), itemDbId);
 
-					shared_ptr<Item> newItem = (Item::CreateItem(*GDBManager->GetItem(itemDbId)));
+					// 후속 처리 (워크 스레드에서 실행)
+					GRoomManager->DoAsync([attackedPlayer, rewardData, itemDbId, slot]()
+						{
+							if (!attackedPlayer)
+								return;
 
-					newItem->SetItemInfo(*itemInfo);
+							Protocol::S_ADD_ITEM packet;
+							Protocol::ItemInfo* itemInfo = packet.add_items();
+							itemInfo->set_count(rewardData->count);
+							itemInfo->set_equipped(false);
+							itemInfo->set_isonmarket(false);
+							itemInfo->set_itemdbid(itemDbId);
+							itemInfo->set_slot(slot.value());
+							itemInfo->set_templateid(rewardData->itemId);
 
-					attackedPlayer->GetInventory().Add(newItem);
+							shared_ptr<Item> newItem = (Item::CreateItem(*GDBManager->GetItem(itemDbId)));
+							newItem->SetItemInfo(*itemInfo);
 
-				}
-				if (auto session = attackedPlayer->GetSession().lock()) {
-					SEND_PACKET(packet);
+							attackedPlayer->GetInventory().Add(newItem);
+
+							if (auto session = attackedPlayer->GetSession().lock()) {
+								SEND_PACKET(packet);
+							}
+						}, true);
 				}
 			}
-		}
-	}
 
+			GDBConnectionPool->Push(dbConn);
+		});
 }
+
+
 RewardData* Monster::GetRandomReward()
 {
 
