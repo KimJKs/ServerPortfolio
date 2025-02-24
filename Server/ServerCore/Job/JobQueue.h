@@ -10,9 +10,9 @@
 class JobQueue : public enable_shared_from_this<JobQueue>
 {
 public:
-	void DoAsync(CallbackType&& callback)
+	void DoAsync(CallbackType&& callback,bool pushOnly = false)
 	{
-		Push(ObjectPool<Job>::MakeShared(std::move(callback)));
+		Push(ObjectPool<Job>::MakeShared(std::move(callback)), pushOnly);
 	}
 
 	template<typename T, typename Ret, typename... Args>
